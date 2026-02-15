@@ -1,3 +1,5 @@
+using BiogenomTestTask.Models.DTOs;
+
 namespace BiogenomTestTask.Models;
 
 public class DetectedItem

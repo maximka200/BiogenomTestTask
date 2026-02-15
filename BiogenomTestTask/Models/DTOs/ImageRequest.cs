@@ -1,4 +1,4 @@
-namespace BiogenomTestTask.Models;
+namespace BiogenomTestTask.Models.DTOs;
 
 public class ImageRequest
 {
