@@ -66,8 +66,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         foreach (var item in imageRequest.Items)
         {
             if (!itemMaterials.TryGetValue(item.Name, out var materialName)) continue;
-            var material = await Materials.FirstOrDefaultAsync(m => m.Name == materialName) 
-                           ?? new Material { Id = Guid.NewGuid(), Name = materialName };
+            var material = await Materials.FirstOrDefaultAsync(m => m.Name == materialName);
+            if (material == null)
+            {
+                material = new Material { Id = Guid.NewGuid(), Name = materialName };
+                Materials.Add(material);
+            }
 
             ItemMaterials.Add(new ItemMaterial
             {
@@ -83,5 +87,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             DetectedItems = imageRequest.Items.Select(i => i.Name).ToArray(),
             ItemMaterials = itemMaterials
         };
+    }
+    
+    public async Task<Guid?> GetImgIdByRequestIdAsync(Guid reqId)
+    {
+        var request = await ImageRequests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == reqId);
+
+        return request?.ImgId;
     }
 }

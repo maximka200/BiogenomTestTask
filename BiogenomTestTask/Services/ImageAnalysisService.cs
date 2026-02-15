@@ -23,7 +23,10 @@ public class ImageAnalysisService(IAiService aiService, AppDbContext dbContext, 
 
     public async Task<CheckMaterialsResponse> AnaliseMaterialsAsync(CheckMaterialsRequest request)
     {
-        var detectedMaterials = await aiService.AnalyzeImageMaterialsAsync(request.Id, request.DetectedItems);
+        var imgId = await dbContext.GetImgIdByRequestIdAsync(request.Id);
+        if (imgId is null)
+            throw new InvalidDataException("Request ID not found.");
+        var detectedMaterials = await aiService.AnalyzeImageMaterialsAsync(imgId.Value, request.DetectedItems);
         return await dbContext.CreateMaterialsResponseAsync(
             request.Id,
             detectedMaterials);

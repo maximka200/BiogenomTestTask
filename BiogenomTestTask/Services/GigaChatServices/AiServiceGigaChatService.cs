@@ -1,49 +1,46 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using BiogenomTestTask.Models;
 using BiogenomTestTask.Models.DTOs;
 using BiogenomTestTask.Services.Interfaces;
-using Microsoft.Extensions.Options;
 
 namespace BiogenomTestTask.Services.GigaChatServices;
 
-public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvider tokenProvider,
-    IOptions<AiSettings> settings) : IAiService
+public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvider tokenProvider) : IAiService
 {
-    private string? accessToken = "";
-    private readonly string baseUrl = settings.Value.BaseUrl;
     private const string Model = "GigaChat-2-Max";
 
     private const string UploadFilePath = "files";
-
     private const string AnalyzeImagePath = "chat/completions";
 
-    private const string FindItemsPromt = "Найди главные обьекты на изображении и верни мне ответ в виде json массива";
-    private const string AnalyseMaterialsPromt = "Определи из каких материалов состоят обьекты на изображении и верни мне ответ в виде json массива";
+    private const string FindItemsPrompt = "Найди главные объекты на изображении и верни ответ в виде JSON массива";
+
+    private const string AnalyzeMaterialsPromptTemplate = """
+                                            У тебя есть следующий список с объектами, обнаруженными на изображении: 
+                                            {0}
+                                            Определи, из каких материалов состоят перечисленные объекты, 
+                                            и верни результат строго в формате JSON-словаря:
+                                            Пример:
+                                            {{
+                                              "Рабочий стол": "дерево",
+                                              "Инструменты": "металл",
+                                              "Станок": "металл и пластик"
+                                            }}
+                                            """;
+
     public async Task<Guid> UploadImageAsStreamAsync(Stream imageStream, string fileName)
     {
-        var accessToken = tokenProvider.GetToken()
+        var accessToken = tokenProvider.GetToken() 
                           ?? throw new InvalidOperationException("Access token is not available");
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            UploadFilePath); 
+        using var request = new HttpRequestMessage(HttpMethod.Post, UploadFilePath);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", accessToken);
-
-        request.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        
         var content = new MultipartFormDataContent();
-        
         var fileContent = new StreamContent(imageStream);
-        fileContent.Headers.ContentType =
-            new MediaTypeHeaderValue(GetImageFormatFromUrl(fileName));
-
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(GetImageFormatFromUrl(fileName));
         content.Add(fileContent, "file", fileName);
-        
         content.Add(new StringContent("general"), "purpose");
 
         request.Content = content;
@@ -52,13 +49,8 @@ public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvi
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        
         var uploadResponse = JsonSerializer.Deserialize<UploadFileResponse>(
-            json,
-            new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         if (uploadResponse?.Id is null)
             throw new InvalidOperationException("File upload failed: no ID returned");
@@ -68,16 +60,27 @@ public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvi
     
     public async Task<string[]> AnalyzeImageItemsAsync(Guid imgId)
     {
-        var accessToken = tokenProvider.GetToken()
+        var response = await AnalyzeImageAsync(imgId, FindItemsPrompt);
+        return ParseArrayResponse(response);
+    }
+    
+    public async Task<Dictionary<string, string>> AnalyzeImageMaterialsAsync(Guid imgId, string[] detectedItems)
+    {
+        var itemsList = string.Join(Environment.NewLine, detectedItems.Select(x => $"- {x}"));
+        var prompt = string.Format(AnalyzeMaterialsPromptTemplate, itemsList);
+
+        var response = await AnalyzeImageAsync(imgId, prompt);
+        return ParseDictionaryResponse(response, detectedItems);
+    }
+    
+    private async Task<JsonDocument> AnalyzeImageAsync(Guid imgId, string prompt)
+    {
+        var accessToken = tokenProvider.GetToken() 
                           ?? throw new InvalidOperationException("Access token is not available");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, AnalyzeImagePath);
-
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", accessToken);
-
-        request.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         var body = new
         {
@@ -87,49 +90,76 @@ public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvi
                 new
                 {
                     role = "user",
-                    content = FindItemsPromt,
+                    content = prompt,
                     attachments = new[] { imgId.ToString() }
                 }
             },
             temperature = 0.7
         };
 
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(body),
-            Encoding.UTF8,
-            "application/json");
+        request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
         var response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-
-        using var doc = JsonDocument.Parse(responseJson);
-
-        var choices = doc.RootElement.GetProperty("choices");
-
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonDocument.Parse(json);
+    }
+    
+    private static string[] ParseArrayResponse(JsonDocument response)
+    {
         var result = new List<string>();
 
-        foreach (var parsed in (from choice in choices.EnumerateArray() select choice
-                     .GetProperty("message")
-                     .GetProperty("content")
-                     .GetString() into content where !string.IsNullOrWhiteSpace(content) select JsonSerializer.Deserialize<string[]>(content)).OfType<string[]>())
+        var choices = response.RootElement.GetProperty("choices");
+        foreach (var contentString in choices.EnumerateArray()
+                     .Select(choice => choice.GetProperty("message").GetProperty("content").GetString())
+                     .Where(c => !string.IsNullOrWhiteSpace(c)))
         {
-            result.AddRange(parsed);
+            try
+            {
+                var items = JsonSerializer.Deserialize<string[]>(contentString);
+                if (items != null) result.AddRange(items);
+            }
+            catch
+            {
+                // ignored
+            }
         }
 
         return result.ToArray();
     }
-
-    public async Task<Dictionary<string, string>> AnalyzeImageMaterialsAsync(Guid imgId, string[] detectedItems)
-    {
-        throw new NotImplementedException();
-    }
     
-    private string GetImageFormatFromUrl(string fileName)
+    private static Dictionary<string, string> ParseDictionaryResponse(JsonDocument response, string[] detectedItems)
+    {
+        var dict = new Dictionary<string, string>();
+
+        var choices = response.RootElement.GetProperty("choices");
+        foreach (var contentString in choices.EnumerateArray()
+                     .Select(choice => choice.GetProperty("message").GetProperty("content").GetString())
+                     .Where(c => !string.IsNullOrWhiteSpace(c)))
+        {
+            try
+            {
+                var parsedDict = JsonSerializer.Deserialize<Dictionary<string, string>>(contentString);
+                if (parsedDict == null) continue;
+                foreach (var kvp in parsedDict)
+                    dict[kvp.Key] = kvp.Value;
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+        
+        foreach (var item in detectedItems)
+            dict.TryAdd(item, "Не определено");
+
+        return dict;
+    }
+
+    private static string GetImageFormatFromUrl(string fileName)
     {
         var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
-
         return extension switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",

@@ -8,7 +8,7 @@ namespace BiogenomTestTask.Controllers;
 [Route("api/[controller]")]
 public class ImageAnalysisController(IImageAnalysisService analiseService) : ControllerBase
 {
-    [HttpPost]
+    [HttpPost("CheckItems")]
     public async Task<IActionResult> CheckItems([FromBody] string link)
     {
         try
@@ -26,7 +26,7 @@ public class ImageAnalysisController(IImageAnalysisService analiseService) : Con
         }
     }
     
-    [HttpPost]
+    [HttpPost("CheckMaterials")]
     public async Task<IActionResult> CheckMaterials([FromBody] CheckMaterialsRequest request)
     {
         try
