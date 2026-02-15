@@ -13,12 +13,20 @@ public class ImageAnalysisService(IAiService aiService, AppDbContext dbContext, 
         
         var imgId = await aiService.UploadImageAsStreamAsync(imageStream, GetFileNameFromUrl(link));
         
-        var detectedItems = await aiService.AnalyzeImageAsync(imageStream, imgId);
+        var detectedItems = await aiService.AnalyzeImageItemsAsync(imgId);
 
         return await dbContext.CreateImageRequestAsync(
             link,
             imgId,
             detectedItems);
+    }
+
+    public async Task<CheckMaterialsResponse> AnaliseMaterialsAsync(CheckMaterialsRequest request)
+    {
+        var detectedMaterials = await aiService.AnalyzeImageMaterialsAsync(request.Id, request.DetectedItems);
+        return await dbContext.CreateMaterialsResponseAsync(
+            request.Id,
+            detectedMaterials);
     }
 
     private async Task<Stream> DownloadImageAsStreamAsync(string link)

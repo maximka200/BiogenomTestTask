@@ -55,4 +55,33 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             DetectedItems = detectedItems
         };
     }
+    
+    public async Task<CheckMaterialsResponse> CreateMaterialsResponseAsync(Guid requestId, Dictionary<string, string> itemMaterials)
+    {
+        var imageRequest = await ImageRequests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == requestId);
+
+        if (imageRequest == null)
+            throw new KeyNotFoundException("Image request not found.");
+
+        foreach (var item in imageRequest.Items)
+        {
+            if (!itemMaterials.TryGetValue(item.Name, out var materialName)) continue;
+            var material = await Materials.FirstOrDefaultAsync(m => m.Name == materialName) 
+                           ?? new Material { Id = Guid.NewGuid(), Name = materialName };
+
+            ItemMaterials.Add(new ItemMaterial
+            {
+                DetectedItemId = item.Id,
+                MaterialId = material.Id
+            });
+        }
+
+        await SaveChangesAsync();
+
+        return new CheckMaterialsResponse
+        {
+            DetectedItems = imageRequest.Items.Select(i => i.Name).ToArray(),
+            ItemMaterials = itemMaterials
+        };
+    }
 }

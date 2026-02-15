@@ -25,4 +25,22 @@ public class ImageAnalysisController(IImageAnalysisService analiseService) : Con
             return StatusCode(500, $"An error occurred while processing the request. {e.Message}");
         }
     }
+    
+    [HttpPost]
+    public async Task<IActionResult> CheckMaterials([FromBody] CheckMaterialsRequest request)
+    {
+        try
+        {
+            var result = await analiseService.AnaliseMaterialsAsync(request);
+            return Ok(result);
+        }
+        catch (InvalidDataException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (Exception e)
+        {
+            return StatusCode(500, $"An error occurred while processing the request. {e.Message}");
+        }
+    }
 }
