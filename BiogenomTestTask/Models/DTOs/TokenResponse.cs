@@ -5,7 +5,7 @@ namespace BiogenomTestTask.Models.DTOs;
 public class TokenResponse
 {
     [JsonPropertyName("access_token")]
-    public string AccessToken { get; set; } = default!;
+    public string AccessToken { get; set; } 
 
     [JsonPropertyName("expires_at")]
     public long ExpiresAt { get; set; }

@@ -18,7 +18,7 @@ public class ImageAnalysisService(IAiService aiService, AppDbContext dbContext, 
         return await dbContext.CreateImageRequestAsync(
             link,
             imgId,
-            detectedItems);
+            NormalizeArray(detectedItems));
     }
 
     public async Task<CheckMaterialsResponse> AnaliseMaterialsAsync(CheckMaterialsRequest request)
@@ -29,7 +29,8 @@ public class ImageAnalysisService(IAiService aiService, AppDbContext dbContext, 
         var detectedMaterials = await aiService.AnalyzeImageMaterialsAsync(imgId.Value, request.DetectedItems);
         return await dbContext.CreateMaterialsResponseAsync(
             request.Id,
-            detectedMaterials);
+            request.DetectedItems,
+            NormalizeDictionary(detectedMaterials));
     }
 
     private async Task<Stream> DownloadImageAsStreamAsync(string link)
@@ -63,5 +64,18 @@ public class ImageAnalysisService(IAiService aiService, AppDbContext dbContext, 
             throw new InvalidDataException("Unable to extract filename from link.");
 
         return fileName;
+    }
+
+    private string[] NormalizeArray(string[] array)
+    {
+        return array.Select(elem => elem.ToLower()).ToArray();
+    }
+    
+    private Dictionary<string, string> NormalizeDictionary(Dictionary<string, string> dict)
+    {
+        return dict.ToDictionary(
+            pair => pair.Key.ToLowerInvariant(),
+            pair => pair.Value.ToLowerInvariant()
+        );
     }
 }

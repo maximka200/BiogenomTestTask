@@ -56,7 +56,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         };
     }
     
-    public async Task<CheckMaterialsResponse> CreateMaterialsResponseAsync(Guid requestId, Dictionary<string, string> itemMaterials)
+    public async Task<CheckMaterialsResponse> CreateMaterialsResponseAsync(Guid requestId, string[] trueDetectedItems, Dictionary<string, string> itemMaterials)
     {
         var imageRequest = await ImageRequests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == requestId);
 
@@ -84,7 +84,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         return new CheckMaterialsResponse
         {
-            DetectedItems = imageRequest.Items.Select(i => i.Name).ToArray(),
+            DetectedItems = trueDetectedItems,
             ItemMaterials = itemMaterials
         };
     }

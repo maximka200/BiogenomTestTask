@@ -8,23 +8,24 @@ namespace BiogenomTestTask.Services.GigaChatServices;
 
 public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvider tokenProvider) : IAiService
 {
-    private const string Model = "GigaChat-2-Max";
+    private const string Model = "GigaChat-2-Pro";
 
     private const string UploadFilePath = "files";
     private const string AnalyzeImagePath = "chat/completions";
 
-    private const string FindItemsPrompt = "Найди главные объекты на изображении и верни ответ в виде JSON массива";
+    private const string FindItemsPrompt = "Найди главные объекты на изображении и верни ответ в виде JSON массива в нижнем регистре, на русском язык";
 
     private const string AnalyzeMaterialsPromptTemplate = """
                                             У тебя есть следующий список с объектами, обнаруженными на изображении: 
                                             {0}
                                             Определи, из каких материалов состоят перечисленные объекты, 
-                                            и верни результат строго в формате JSON-словаря:
+                                            и верни результат строго в формате JSON-словаря и в нижнем регистре, на русском языке:
                                             Пример:
                                             {{
-                                              "Рабочий стол": "дерево",
-                                              "Инструменты": "металл",
-                                              "Станок": "металл и пластик"
+                                              "рабочий стол": "дерево",
+                                              "инструменты": "металл",
+                                              "станок": "металл",
+                                              "станок": "пластик"
                                             }}
                                             """;
 
@@ -152,7 +153,7 @@ public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvi
         }
         
         foreach (var item in detectedItems)
-            dict.TryAdd(item, "Не определено");
+            dict.TryAdd(item, "не определено");
 
         return dict;
     }
