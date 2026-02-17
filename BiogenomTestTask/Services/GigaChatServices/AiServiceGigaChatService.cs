@@ -13,7 +13,7 @@ public class AiServiceGigaChatService(HttpClient httpClient, IGigaChatTokenProvi
     private const string UploadFilePath = "files";
     private const string AnalyzeImagePath = "chat/completions";
 
-    private const string FindItemsPrompt = "Найди главные объекты на изображении и верни ответ в виде JSON массива в нижнем регистре, на русском язык";
+    private const string FindItemsPrompt = "Найди главные объекты на изображении и верни ответ в виде JSON массива в нижнем регистре, на русском языкe";
 
     private const string AnalyzeMaterialsPromptTemplate = """
                                             У тебя есть следующий список с объектами, обнаруженными на изображении: 
